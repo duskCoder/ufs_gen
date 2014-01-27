@@ -50,8 +50,13 @@ static int suffix_nops_g = 0;
     __attribute__((noreturn))
 static void usage(const char *arg0)
 {
-    fprintf(stderr, "usage: %s --override addr --with addr --stackidx idx\n", arg0);
-    fprintf(stderr, "       %s --override addr --with addr --stackidx idx --addrsize size\n", arg0);
+    (void)arg0;
+
+    fputs("usage:\n\n", stderr);
+    fputs(
+	    "ufs_gen "
+	    "[--prefix pfx] [--suffix sfx] [--sfxnops n]\n"
+	    "        --override addr --with addr --stackidx idx\n", stderr);
 
     exit(EX_USAGE);
 }
