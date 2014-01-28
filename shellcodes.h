@@ -24,7 +24,7 @@ typedef struct {
     char *payload;
 } shellcode_t;
 
-shellcode_t common_shellcodes_g[] = {
+static shellcode_t common_shellcodes_g[] = {
     {
         .name = "Linux x86\n"
             "\texecve(\"/bin/sh\", 0, 0)",
